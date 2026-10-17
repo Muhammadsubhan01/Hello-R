@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nuts Puzzle: Sort By Color - HTML5 Edition</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      background: #090d16;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
+    }
+    header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(10px);
+      padding: 12px 20px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 15px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .btn {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #0f172a;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.1);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .btn-secondary {
+      background: rgba(51, 65, 85, 0.8);
+      color: #f8fafc;
+      box-shadow: none;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    #canvas-holder {
+      position: relative;
+      width: 100%;
+      max-width: 850px;
+      aspect-ratio: 16 / 9;
+      background: rgba(15, 23, 42, 0.7);
+      border-radius: 24px;
+      border: 2px solid #1e293b;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 20px 40px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .modal.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: #0f172a;
+      border: 2px solid #334155;
+      padding: 30px;
+      border-radius: 24px;
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+    }
+    .level-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      max-height: 260px;
+      overflow-y: auto;
+      margin: 15px 0;
+      padding-right: 5px;
+    }
+    .level-cell {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #f1f5f9;
+      padding: 12px 5px;
+      border-radius: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .level-cell.unlocked:hover {
+      background: #f59e0b;
+      color: #0f172a;
+    }
+    .level-cell.locked {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <header>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button class="btn" id="btn-level-select">LEVEL <span id="lbl-level">1</span></button>
+        <div style="font-weight: 700; font-size: 14px; color: #cbd5e1;">
+          Moves: <span id="lbl-moves" style="color: #f59e0b; font-size: 16px;">0</span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" id="btn-add-bolt" title="Add Screw">+ Screw</button>
+        <button class="btn btn-secondary" id="btn-undo" title="Undo Move">Undo</button>
+        <button class="btn btn-secondary" id="btn-reset" title="Reset Level">Reset</button>
+        <button class="btn btn-secondary" id="btn-sound" title="Toggle Sound">🔊</button>
+      </div>
+    </header>
+
+    <div id="canvas-holder">
+      <canvas id="gameCanvas" width="1000" height="562"></canvas>
+
+      <!-- Win Modal -->
+      <div class="modal" id="modal-win">
+        <div class="modal-card">
+          <h2 style="font-size: 28px; font-weight: 900; color: #f59e0b; margin-bottom: 8px;">LEVEL CLEARED!</h2>
+          <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">All nuts sorted perfectly!</p>
+          <div style="font-size: 36px; margin-bottom: 20px;" id="win-stars">⭐⭐⭐</div>
+          <button class="btn" id="btn-next-level" style="width: 100%; justify-content: center; padding: 12px; font-size: 16px;">Next Level ➔</button>
+        </div>
+      </div>
+
+      <!-- Level Select Modal -->
+      <div class="modal" id="modal-levels">
+        <div class="modal-card">
+          <h3 style="font-size: 22px; font-weight: 800; color: #f8fafc; margin-bottom: 15px;">Select Level</h3>
+          <div class="level-grid" id="level-grid"></div>
+          <button class="btn btn-secondary" id="btn-close-levels" style="width: 100%; margin-top: 10px;">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- COLOR PALETTE ---
+    const COLORS = {
+      red: '#ef4444',
+      blue: '#3b82f6',
+      green: '#22c55e',
+      yellow: '#eab308',
+      purple: '#a855f7',
+      orange: '#f97316',
+      cyan: '#06b6d4',
+      pink: '#ec4899'
+    };
+    const COLOR_KEYS = Object.keys(COLORS);
+    const CAPACITY = 4;
+
+    // --- AUDIO SYSTEM ---
+    class SoundSystem {
+      constructor() {
+        this.enabled = true;
+        this.ctx = null;
+      }
+      getCtx() {
+        if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+        return this.ctx;
+      }
+      playPop() {
+        if (!this.enabled) return;
+        const ctx = this.getCtx(); if (!ctx) return;
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.08);
+        g.gain.setValueAtTime(0.2, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.08);
+      }
+      playPour() {
+        if (!this.enabled) return;
+        const ctx = this.getCtx(); if (!ctx) return;
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(550, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(250, ctx.currentTime + 0.12);
+        g.gain.setValueAtTime(0.2, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.12);
+      }
+      playWin() {
+        if (!this.enabled) return;
+        const ctx = this.getCtx(); if (!ctx) return;
+        [523, 659, 783, 1046].forEach((freq, i) => {
+          const osc = ctx.createOscillator(), g = ctx.createGain();
+          osc.type = 'sine'; osc.frequency.value = freq;
+          const t = ctx.currentTime + i * 0.1;
+          g.gain.setValueAtTime(0.2, t);
+          g.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+          osc.connect(g); g.connect(ctx.destination);
+          osc.start(t); osc.stop(t + 0.25);
+        });
+      }
+    }
+    const sound = new SoundSystem();
+
+    // --- GAME ENGINE STATE ---
+    let currentLevel = 1;
+    let maxUnlocked = parseInt(localStorage.getItem('nuts_html5_max') || '1', 10);
+    let bolts = [];
+    let selectedIdx = null;
+    let moves = 0;
+    let history = [];
+    let addedCount = 0;
+    let isWon = false;
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- LEVEL GENERATOR ---
+    function generateLevel(levelNum) {
+      const numColors = Math.min(2 + Math.floor((levelNum - 1) / 2), 6);
+      const colors = COLOR_KEYS.slice(0, numColors);
+      const solved = colors.map(c => Array(CAPACITY).fill().map((_, i) => ({ color: c, hidden: false })));
+      solved.push([], []);
+
+      let current = JSON.parse(JSON.stringify(solved));
+      for (let s = 0; s < 30 + levelNum * 5; s++) {
+        const movesList = [];
+        for (let i = 0; i < current.length; i++) {
+          if (current[i].length === 0) continue;
+          for (let j = 0; j < current.length; j++) {
+            if (i !== j && current[j].length < CAPACITY) movesList.push([i, j]);
+          }
+        }
+        if (movesList.length > 0) {
+          const [f, t] = movesList[Math.floor(Math.random() * movesList.length)];
+          current[t].push(current[f].pop());
+        }
+      }
+      return current;
+    }
+
+    function startLevel(lvl) {
+      currentLevel = lvl;
+      bolts = generateLevel(lvl);
+      selectedIdx = null;
+      moves = 0;
+      history = [];
+      addedCount = 0;
+      isWon = false;
+      document.getElementById('lbl-level').innerText = currentLevel;
+      document.getElementById('lbl-moves').innerText = moves;
+      document.getElementById('modal-win').classList.remove('active');
+      render();
+    }
+
+    function isValidMove(from, to) {
+      if (from === to || from === null) return false;
+      if (!bolts[from] || bolts[from].length === 0) return false;
+      if (bolts[to].length >= CAPACITY) return false;
+      if (bolts[to].length === 0) return true;
+      return bolts[from][bolts[from].length - 1].color === bolts[to][bolts[to].length - 1].color;
+    }
+
+    function checkWin() {
+      for (const b of bolts) {
+        if (b.length === 0) continue;
+        if (b.length < CAPACITY) return false;
+        if (b.some(n => n.color !== b[0].color)) return false;
+      }
+      return true;
+    }
+
+    // --- CANVAS RENDERING ---
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const numBolts = bolts.length;
+      const cols = Math.min(numBolts, 6);
+      const spacingX = canvas.width / (cols + 1);
+      const startY = numBolts > 6 ? 160 : 220;
+
+      bolts.forEach((bolt, idx) => {
+        const col = idx % 6;
+        const row = Math.floor(idx / 6);
+        const x = spacingX * (col + 1);
+        const y = startY + row * 220;
+
+        // Draw Wooden Base
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(x - 45, y + 140, 90, 16);
+        ctx.fillStyle = '#451a03';
+        ctx.fillRect(x - 45, y + 152, 90, 6);
+
+        // Draw Metallic Bolt Rod
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(x - 8, y - 40, 16, 180);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(x - 4, y - 40, 4, 180);
+
+        // Draw Thread Ridges
+        ctx.fillStyle = '#334155';
+        for (let t = y - 30; t < y + 130; t += 12) {
+          ctx.fillRect(x - 10, t, 20, 2);
+        }
+
+        // Draw Stacked Nuts
+        bolt.forEach((nut, nIdx) => {
+          const isTop = nIdx === bolt.length - 1;
+          const isLifted = selectedIdx === idx && isTop;
+          const nutY = isLifted ? y - 70 : y + 110 - nIdx * 32;
+
+          // Nut Hex Shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.4)';
+          ctx.beginPath();
+          ctx.roundRect(x - 38, nutY + 4, 76, 26, 8);
+          ctx.fill();
+
+          // Nut Body
+          ctx.fillStyle = COLORS[nut.color] || '#94a3b8';
+          ctx.beginPath();
+          ctx.roundRect(x - 40, nutY, 80, 26, 8);
+          ctx.fill();
+
+          // Inner Hole Cutout
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(x, nutY + 13, 8, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      });
+    }
+
+    // --- USER INTERACTION ---
+    canvas.addEventListener('click', (e) => {
+      if (isWon) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+      const numBolts = bolts.length;
+      const cols = Math.min(numBolts, 6);
+      const spacingX = canvas.width / (cols + 1);
+      const startY = numBolts > 6 ? 160 : 220;
+
+      let clickedBolt = null;
+      bolts.forEach((_, idx) => {
+        const col = idx % 6;
+        const row = Math.floor(idx / 6);
+        const x = spacingX * (col + 1);
+        const y = startY + row * 220;
+
+        if (Math.abs(clickX - x) < 50 && clickY > y - 80 && clickY < y + 160) {
+          clickedBolt = idx;
+        }
+      });
+
+      if (clickedBolt !== null) {
+        if (selectedIdx === null) {
+          if (bolts[clickedBolt].length > 0) {
+            selectedIdx = clickedBolt;
+            sound.playPop();
+          }
+        } else if (selectedIdx === clickedBolt) {
+          selectedIdx = null;
+          sound.playPop();
+        } else {
+          if (isValidMove(selectedIdx, clickedBolt)) {
+            history.push(JSON.parse(JSON.stringify(bolts)));
+            const nut = bolts[selectedIdx].pop();
+            bolts[clickedBolt].push(nut);
+            sound.playPour();
+            moves++;
+            document.getElementById('lbl-moves').innerText = moves;
+            selectedIdx = null;
+
+            if (checkWin()) {
+              isWon = true;
+              sound.playWin();
+              maxUnlocked = Math.max(maxUnlocked, currentLevel + 1);
+              localStorage.setItem('nuts_html5_max', maxUnlocked);
+              setTimeout(() => {
+                document.getElementById('modal-win').classList.add('active');
+              }, 400);
+            }
+          } else {
+            selectedIdx = null;
+          }
+        }
+        render();
+      }
+    });
+
+    // --- UI CONTROLS ---
+    document.getElementById('btn-undo').addEventListener('click', () => {
+      if (history.length > 0 && !isWon) {
+        bolts = history.pop();
+        selectedIdx = null;
+        sound.playPop();
+        render();
+      }
+    });
+
+    document.getElementById('btn-add-bolt').addEventListener('click', () => {
+      if (addedCount < 2 && !isWon) {
+        bolts.push([]);
+        addedCount++;
+        sound.playPop();
+        render();
+      }
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      startLevel(currentLevel);
+      sound.playPop();
+    });
+
+    document.getElementById('btn-sound').addEventListener('click', () => {
+      sound.enabled = !sound.enabled;
+      document.getElementById('btn-sound').innerText = sound.enabled ? '🔊' : '🔇';
+    });
+
+    document.getElementById('btn-next-level').addEventListener('click', () => {
+      startLevel(currentLevel + 1);
+    });
+
+    document.getElementById('btn-level-select').addEventListener('click', () => {
+      const grid = document.getElementById('level-grid');
+      grid.innerHTML = '';
+      for (let i = 1; i <= 20; i++) {
+        const cell = document.createElement('div');
+        cell.className = `level-cell ${i <= maxUnlocked ? 'unlocked' : 'locked'}`;
+        cell.innerText = i;
+        if (i <= maxUnlocked) {
+          cell.addEventListener('click', () => {
+            document.getElementById('modal-levels').classList.remove('active');
+            startLevel(i);
+          });
+        }
+        grid.appendChild(cell);
+      }
+      document.getElementById('modal-levels').classList.add('active');
+    });
+
+    document.getElementById('btn-close-levels').addEventListener('click', () => {
+      document.getElementById('modal-levels').classList.remove('active');
+    });
+
+    // Start Game Level 1
+    startLevel(currentLevel);
+  </script>
+</body>
+</html>
